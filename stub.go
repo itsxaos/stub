@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/miekg/dns"
+	"go.uber.org/zap"
 	"github.com/mholt/acmez"
 	"github.com/mholt/acmez/acme"
 	"github.com/caddyserver/caddy/v2"
@@ -19,6 +20,7 @@ type StubDNS struct {
 	Address string `json:"address,omitempty"`
 
 	server *dns.Server // set in Present()
+	logger *zap.Logger // set in Provision()
 }
 
 
@@ -36,8 +38,15 @@ func (StubDNS) CaddyModule() caddy.ModuleInfo {
 
 // Provision sets up the module. Implements caddy.Provisioner.
 func (p *StubDNS) Provision(ctx caddy.Context) error {
+	p.logger = ctx.Logger()
 	repl := caddy.NewReplacer()
+	before := p.Address
 	p.Address = repl.ReplaceAll(p.Address, "")
+	p.logger.Debug(
+		"provisioned",
+		zap.String("address", p.Address),
+		zap.String("address_before_replace", before),
+	)
 	return nil
 }
 
@@ -84,18 +93,31 @@ func (s *StubDNS) Present(ctx context.Context, challenge acme.Challenge) error {
 	fqdn := dns.Fqdn(challenge.DNS01TXTRecordName())
 	content := challenge.DNS01KeyAuthorization()
 
+	s.logger.Debug(
+		"presenting record",
+		zap.String("name", fqdn),
+		zap.String("content", content),
+		zap.String("address", s.Address),
+	)
+
 	// dns.Server.ListenAndServe blocks when it binds successfully,
 	// so it has to run in a separate task and can't return errors directly
 
 	if err := try_bind(ctx, s.Address); err != nil {
+		s.logger.Error(
+			"failed to bind",
+			zap.String("address", s.Address),
+			zap.Error(err),
+		)
 		return err
 	}
 
 	// spawn the server
 	handler := s.make_handler(fqdn, content)
+	// could also use fqdn as pattern, but "." allows logging invalid requests
 	dns.HandleFunc(".", handler)
 	server := &dns.Server{Addr: s.Address, Net: "udp", TsigSecret: nil,}
-	go server.ListenAndServe()
+	go s.serve(server)
 
 	// store the server for shutdown later
 	s.server = server
@@ -104,8 +126,13 @@ func (s *StubDNS) Present(ctx context.Context, challenge acme.Challenge) error {
 
 func (p *StubDNS) CleanUp(ctx context.Context, _ acme.Challenge) error {
 	if p.server == nil {
+		p.logger.Debug("server never started, nothing to clean up")
 		return nil
 	} else {
+		p.logger.Debug(
+			"shutting down DNS server",
+			zap.String("address", p.Address),
+		)
 		return p.server.ShutdownContext(ctx)
 	}
 }
@@ -120,10 +147,28 @@ func try_bind(ctx context.Context, address string) error {
 	return err
 }
 
+func (s *StubDNS) serve(server *dns.Server) {
+	err := server.ListenAndServe()
+	if err != nil {
+		s.logger.Error(
+			"DNS ListenAndServe returned an error!",
+			zap.Error(err),
+		)
+	} else {
+		s.logger.Debug("server terminated successfully")
+	}
+}
+
 func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
+	logger := s.logger
 	handler := func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
+
+		logger.Debug(
+			"received DNS query",
+			zap.Stringer("address", w.RemoteAddr()),
+		)
 		if len(r.Question) != 1 {
 			m.Rcode = dns.RcodeRefused
 			m.Answer = []dns.RR{}
@@ -138,9 +183,11 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 			(q.Qclass == dns.ClassINET || q.Qclass == dns.ClassANY) &&
 			q.Qtype == dns.TypeTXT
 		if !valid {
+			logger.Debug("invalid request header")
 			m.Rcode = dns.RcodeNotImplemented
 			m.Answer = []dns.RR{}
 		} else if domain != fqdn {
+			logger.Debug("invalid domain")
 			m.Rcode = dns.RcodeNameError
 			m.Answer = []dns.RR{}
 		} else {
