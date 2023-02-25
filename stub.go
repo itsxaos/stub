@@ -2,6 +2,7 @@ package stub
 
 import (
 	"context"
+	"net"
 
 	"github.com/miekg/dns"
 	"github.com/mholt/acmez"
@@ -82,6 +83,14 @@ func (s *StubDNS) Present(ctx context.Context, challenge acme.Challenge) error {
 	// get challenge parameters
 	fqdn := dns.Fqdn(challenge.DNS01TXTRecordName())
 	content := challenge.DNS01KeyAuthorization()
+
+	// dns.Server.ListenAndServe blocks when it binds successfully,
+	// so it has to run in a separate task and can't return errors directly
+
+	if err := try_bind(ctx, s.Address); err != nil {
+		return err
+	}
+
 	// spawn the server
 	handler := s.make_handler(fqdn, content)
 	dns.HandleFunc(".", handler)
@@ -99,6 +108,16 @@ func (p *StubDNS) CleanUp(ctx context.Context, _ acme.Challenge) error {
 	} else {
 		return p.server.ShutdownContext(ctx)
 	}
+}
+
+// quickly check whether it's possible to bind to the address
+func try_bind(ctx context.Context, address string) error {
+	var lc net.ListenConfig
+	conn, err := lc.ListenPacket(ctx, "udp", address)
+	if conn != nil {
+		return conn.Close()
+	}
+	return err
 }
 
 func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
