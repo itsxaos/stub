@@ -4,13 +4,13 @@ import (
 	"context"
 	"net"
 
+	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
+	"github.com/mholt/acmez"
+	"github.com/mholt/acmez/acme"
 	"github.com/miekg/dns"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"github.com/mholt/acmez"
-	"github.com/mholt/acmez/acme"
-	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 )
 
 // TTL of the challenge TXT record to serve
@@ -25,8 +25,7 @@ type StubDNS struct {
 }
 
 // Wrapper for logging (relevant parts of) dns.Msg
-type LoggableDNSMsg struct {*dns.Msg}
-
+type LoggableDNSMsg struct{ *dns.Msg }
 
 func init() {
 	caddy.RegisterModule(StubDNS{})
@@ -36,7 +35,7 @@ func init() {
 func (StubDNS) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
 		ID:  "dns.providers.stub_dns",
-		New: func() caddy.Module {return &StubDNS{}},
+		New: func() caddy.Module { return &StubDNS{} },
 	}
 }
 
@@ -56,10 +55,9 @@ func (p *StubDNS) Provision(ctx caddy.Context) error {
 
 // UnmarshalCaddyfile sets up the DNS provider from Caddyfile tokens. Syntax:
 //
-// stub_dns [address] {
-//     address <address>
-// }
-//
+//	stub_dns [address] {
+//	    address <address>
+//	}
 func (s *StubDNS) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	for d.Next() {
 		if d.NextArg() {
@@ -91,7 +89,6 @@ func (s *StubDNS) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	return nil
 }
 
-
 func (s *StubDNS) Present(ctx context.Context, challenge acme.Challenge) error {
 	// get challenge parameters
 	fqdn := dns.Fqdn(challenge.DNS01TXTRecordName())
@@ -120,7 +117,7 @@ func (s *StubDNS) Present(ctx context.Context, challenge acme.Challenge) error {
 	handler := s.make_handler(fqdn, content)
 	// could also use fqdn as pattern, but "." allows logging invalid requests
 	dns.HandleFunc(".", handler)
-	server := &dns.Server{Addr: s.Address, Net: "udp", TsigSecret: nil,}
+	server := &dns.Server{Addr: s.Address, Net: "udp", TsigSecret: nil}
 	go s.serve(server)
 
 	// store the server for shutdown later
@@ -204,10 +201,10 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 			m.Authoritative = true
 			rr := new(dns.TXT)
 			rr.Hdr = dns.RR_Header{
-				Name: domain,
+				Name:   domain,
 				Rrtype: dns.TypeTXT,
-				Class: dns.ClassINET,
-				Ttl: uint32(challenge_ttl),
+				Class:  dns.ClassINET,
+				Ttl:    uint32(challenge_ttl),
 			}
 			rr.Txt = []string{txt}
 			m.Answer = []dns.RR{rr}
@@ -222,7 +219,6 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 	return handler
 }
 
-
 // MarshalLogObject satisfies the zapcore.ObjectMarshaler interface.
 func (m LoggableDNSMsg) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	// adapted version of MsgHdr.String() from github.com/miekg/dns
@@ -231,14 +227,30 @@ func (m LoggableDNSMsg) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("status", dns.RcodeToString[m.Rcode])
 
 	flag_array := func(arr zapcore.ArrayEncoder) error {
-		if m.Response {arr.AppendString("qr")}
-		if m.Authoritative {arr.AppendString("aa")}
-		if m.Truncated {arr.AppendString("tc")}
-		if m.RecursionDesired {arr.AppendString("rd")}
-		if m.RecursionAvailable {arr.AppendString("ra")}
-		if m.Zero {arr.AppendString("z")}
-		if m.AuthenticatedData {arr.AppendString("ad")}
-		if m.CheckingDisabled {arr.AppendString("cd")}
+		if m.Response {
+			arr.AppendString("qr")
+		}
+		if m.Authoritative {
+			arr.AppendString("aa")
+		}
+		if m.Truncated {
+			arr.AppendString("tc")
+		}
+		if m.RecursionDesired {
+			arr.AppendString("rd")
+		}
+		if m.RecursionAvailable {
+			arr.AppendString("ra")
+		}
+		if m.Zero {
+			arr.AppendString("z")
+		}
+		if m.AuthenticatedData {
+			arr.AppendString("ad")
+		}
+		if m.CheckingDisabled {
+			arr.AppendString("cd")
+		}
 
 		return nil
 	}
@@ -305,10 +317,9 @@ func log_questions(enc zapcore.ObjectEncoder, questions *[]dns.Question) {
 	}
 }
 
-
 // Interface guards
 var (
-	_ acmez.Solver = (*StubDNS)(nil)
-	_ caddy.Provisioner = (*StubDNS)(nil)
+	_ acmez.Solver          = (*StubDNS)(nil)
+	_ caddy.Provisioner     = (*StubDNS)(nil)
 	_ caddyfile.Unmarshaler = (*StubDNS)(nil)
 )
