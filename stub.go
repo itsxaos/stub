@@ -203,7 +203,7 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 		case !(q.Qclass == dns.ClassINET || q.Qclass == dns.ClassANY):
 			reject_and_log(dns.RcodeNotImplemented, "invalid class")
 		case q.Qtype != dns.TypeTXT:
-			reject_and_log(dns.RcodeNotImplemented, "invalid type")
+			reject_and_log(dns.RcodeRefused, "invalid type")
 		case domain != fqdn:
 			reject_and_log(dns.RcodeNameError, "wrong domain")
 		default:
