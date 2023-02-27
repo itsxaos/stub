@@ -3,6 +3,7 @@ package stub
 import (
 	"context"
 	"net"
+	"strings"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -202,15 +203,17 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 			reject_and_log(dns.RcodeRefused, "not a query")
 		case !(q.Qclass == dns.ClassINET || q.Qclass == dns.ClassANY):
 			reject_and_log(dns.RcodeNotImplemented, "invalid class")
+		// queries may be wAcKY casE
+		// https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00
+		case !strings.EqualFold(domain, fqdn):
+			reject_and_log(dns.RcodeNameError, "wrong domain")
 		case q.Qtype != dns.TypeTXT:
 			reject_and_log(dns.RcodeRefused, "invalid type")
-		case domain != fqdn:
-			reject_and_log(dns.RcodeNameError, "wrong domain")
 		default:
 			m.Authoritative = true
 			rr := new(dns.TXT)
 			rr.Hdr = dns.RR_Header{
-				Name:   domain,
+				Name:   fqdn, // only question section has to match wAcKY casE
 				Rrtype: dns.TypeTXT,
 				Class:  dns.ClassINET,
 				Ttl:    uint32(challenge_ttl),
