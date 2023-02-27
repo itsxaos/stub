@@ -186,18 +186,27 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 		q := r.Question[0]
 		domain := q.Name
 
-		valid := r.Response == false &&
-			(q.Qclass == dns.ClassINET || q.Qclass == dns.ClassANY) &&
-			q.Qtype == dns.TypeTXT
-		if !valid {
-			logger.Debug("invalid request header")
-			m.Rcode = dns.RcodeNotImplemented
+		reject_and_log := func(code int, reason string) {
+			m.Rcode = code
 			m.Answer = []dns.RR{}
-		} else if domain != fqdn {
-			logger.Debug("invalid domain")
-			m.Rcode = dns.RcodeNameError
-			m.Answer = []dns.RR{}
-		} else {
+			logger.Debug(
+				"rejecting query",
+				zap.String("reason", reason),
+				zap.Object("response", LoggableDNSMsg{m}),
+			)
+			w.WriteMsg(m)
+		}
+
+		switch {
+		case r.Response:
+			reject_and_log(dns.RcodeRefused, "not a query")
+		case !(q.Qclass == dns.ClassINET || q.Qclass == dns.ClassANY):
+			reject_and_log(dns.RcodeNotImplemented, "invalid class")
+		case q.Qtype != dns.TypeTXT:
+			reject_and_log(dns.RcodeNotImplemented, "invalid type")
+		case domain != fqdn:
+			reject_and_log(dns.RcodeNameError, "wrong domain")
+		default:
 			m.Authoritative = true
 			rr := new(dns.TXT)
 			rr.Hdr = dns.RR_Header{
@@ -208,12 +217,12 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 			}
 			rr.Txt = []string{txt}
 			m.Answer = []dns.RR{rr}
+			logger.Debug(
+				"replying",
+				zap.Object("response", LoggableDNSMsg{m}),
+			)
+			w.WriteMsg(m)
 		}
-		logger.Debug(
-			"sending response",
-			zap.Object("response", LoggableDNSMsg{m}),
-		)
-		w.WriteMsg(m)
 	}
 
 	return handler
