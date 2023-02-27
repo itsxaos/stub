@@ -173,20 +173,6 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 			zap.Object("request", LoggableDNSMsg{r}),
 		)
 
-		if len(r.Question) != 1 {
-			m.Rcode = dns.RcodeRefused
-			m.Answer = []dns.RR{}
-			logger.Info(
-				"refusing invalid request",
-				zap.Object("response", LoggableDNSMsg{m}),
-			)
-			w.WriteMsg(m)
-			return
-		}
-
-		q := r.Question[0]
-		domain := q.Name
-
 		reject_and_log := func(code int, reason string) {
 			m.Rcode = code
 			m.Answer = []dns.RR{}
@@ -197,6 +183,13 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 			)
 			w.WriteMsg(m)
 		}
+
+		if len(r.Question) != 1 {
+			reject_and_log(dns.RcodeRefused, "not exactly 1 question")
+			return
+		}
+		q := r.Question[0]
+		domain := q.Name
 
 		switch {
 		case r.Response:
