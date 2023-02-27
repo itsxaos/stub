@@ -1,6 +1,9 @@
 Stub DNS module for Caddy
 =========================
 
+> **Warning**
+>
+> This is alpha-quality, at best. It is not ready for production use. Use at your own risk!
 
 The easiest way to get a wildcard certificate with Caddy: almost as *magical* as the automatic [HTTP challenge](https://caddyserver.com/docs/automatic-https#http-challenge)!
 
