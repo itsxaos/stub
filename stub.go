@@ -116,9 +116,12 @@ func (s *StubDNS) Present(ctx context.Context, challenge acme.Challenge) error {
 
 	// spawn the server
 	handler := s.make_handler(fqdn, content)
-	// could also use fqdn as pattern, but "." allows logging invalid requests
-	dns.HandleFunc(".", handler)
-	server := &dns.Server{Addr: s.Address, Net: "udp", TsigSecret: nil}
+	server := &dns.Server{
+		Addr:       s.Address,
+		Net:        "udp",
+		Handler:    handler,
+		TsigSecret: nil,
+	}
 	go s.serve(server)
 
 	// store the server for shutdown later
