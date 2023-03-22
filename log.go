@@ -206,3 +206,19 @@ func log_RR(enc zapcore.ObjectEncoder, rr dns.RR) {
 	default:
 	}
 }
+
+func log_libdns_record(record *libdns.Record) zapcore.ObjectMarshaler {
+	f := func(enc zapcore.ObjectEncoder) error {
+		enc.AddString("ID", record.ID)
+		enc.AddString("type", record.Type)
+		enc.AddString("name", record.Name)
+		enc.AddString("value", record.Value)
+		enc.AddString("TTL", record.TTL.String())
+		if record.Priority != 0 {
+			enc.AddInt("priority", record.Priority)
+		}
+		return nil
+	}
+	return zapcore.ObjectMarshalerFunc(f)
+}
+
