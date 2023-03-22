@@ -222,3 +222,29 @@ func log_libdns_record(record *libdns.Record) zapcore.ObjectMarshaler {
 	return zapcore.ObjectMarshalerFunc(f)
 }
 
+
+// MarshalLogObject satisfies the zapcore.ObjectMarshaler interface.
+func (r request) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("zone", r.zone)
+	if r.append {
+		enc.AddString("type", "append")
+	} else {
+		enc.AddString("type", "delete")
+	}
+
+	if len(r.records) > 0 {
+		array := func(arr zapcore.ArrayEncoder) error {
+			for _, r := range r.records {
+				object := func(obj zapcore.ObjectEncoder) error {
+					log_RR(obj, r)
+					return nil
+				}
+				arr.AppendObject(zapcore.ObjectMarshalerFunc(object))
+			}
+			return nil
+		}
+		enc.AddArray("records", zapcore.ArrayMarshalerFunc(array))
+	}
+
+	return nil
+}
