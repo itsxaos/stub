@@ -10,8 +10,6 @@ import (
 	"github.com/mholt/acmez"
 	"github.com/mholt/acmez/acme"
 	"github.com/miekg/dns"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 // TTL of the challenge TXT record to serve
@@ -24,9 +22,6 @@ type StubDNS struct {
 	server *dns.Server // set in Present()
 	logger *zap.Logger // set in Provision()
 }
-
-// Wrapper for logging (relevant parts of) dns.Msg
-type LoggableDNSMsg struct{ *dns.Msg }
 
 func init() {
 	caddy.RegisterModule(StubDNS{})
@@ -225,104 +220,6 @@ func (s *StubDNS) make_handler(fqdn string, txt string) dns.HandlerFunc {
 	}
 
 	return handler
-}
-
-// MarshalLogObject satisfies the zapcore.ObjectMarshaler interface.
-func (m LoggableDNSMsg) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	// adapted version of MsgHdr.String() from github.com/miekg/dns
-	enc.AddUint16("id", m.Id)
-	enc.AddString("opcode", dns.OpcodeToString[m.Opcode])
-	enc.AddString("status", dns.RcodeToString[m.Rcode])
-
-	flag_array := func(arr zapcore.ArrayEncoder) error {
-		if m.Response {
-			arr.AppendString("qr")
-		}
-		if m.Authoritative {
-			arr.AppendString("aa")
-		}
-		if m.Truncated {
-			arr.AppendString("tc")
-		}
-		if m.RecursionDesired {
-			arr.AppendString("rd")
-		}
-		if m.RecursionAvailable {
-			arr.AppendString("ra")
-		}
-		if m.Zero {
-			arr.AppendString("z")
-		}
-		if m.AuthenticatedData {
-			arr.AppendString("ad")
-		}
-		if m.CheckingDisabled {
-			arr.AppendString("cd")
-		}
-
-		return nil
-	}
-	enc.AddArray("flags", zapcore.ArrayMarshalerFunc(flag_array))
-
-	log_questions(enc, &m.Question)
-	log_answers(enc, &m.Answer)
-	// not logged:
-	// - EDNS0 "OPT pseudosection" from m.IsEdns0()
-	// - "authority section" in m.Ns
-	// - "additional section" in m.Extra
-
-	return nil
-}
-
-func log_answers(enc zapcore.ObjectEncoder, answers *[]dns.RR) {
-	if len(*answers) > 0 {
-		array := func(arr zapcore.ArrayEncoder) error {
-			for _, r := range *answers {
-				// since we only serve TXT records
-				txt, ok := r.(*dns.TXT)
-				if ok {
-					object := func(obj zapcore.ObjectEncoder) error {
-						obj.AddString("name", txt.Hdr.Name)
-						obj.AddString("class", dns.ClassToString[txt.Hdr.Class])
-						obj.AddString("type", dns.TypeToString[txt.Hdr.Rrtype])
-						obj.AddUint32("TTL", txt.Hdr.Ttl)
-						rec := func(arr2 zapcore.ArrayEncoder) error {
-							for _, t := range txt.Txt {
-								arr2.AppendString(t)
-							}
-							return nil
-						}
-						obj.AddArray("content", zapcore.ArrayMarshalerFunc(rec))
-						return nil
-					}
-					arr.AppendObject(zapcore.ObjectMarshalerFunc(object))
-				} else {
-					// fallback for other record types, serialized dig-style
-					arr.AppendString(r.String())
-				}
-			}
-			return nil
-		}
-		enc.AddArray("answer", zapcore.ArrayMarshalerFunc(array))
-	}
-}
-
-func log_questions(enc zapcore.ObjectEncoder, questions *[]dns.Question) {
-	if len(*questions) > 0 {
-		array := func(arr zapcore.ArrayEncoder) error {
-			for _, q := range *questions {
-				object := func(obj zapcore.ObjectEncoder) error {
-					obj.AddString("name", q.Name)
-					obj.AddString("class", dns.ClassToString[q.Qclass])
-					obj.AddString("type", dns.TypeToString[q.Qtype])
-					return nil
-				}
-				arr.AppendObject(zapcore.ObjectMarshalerFunc(object))
-			}
-			return nil
-		}
-		enc.AddArray("question", zapcore.ArrayMarshalerFunc(array))
-	}
 }
 
 // Interface guards
