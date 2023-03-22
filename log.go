@@ -222,7 +222,6 @@ func log_libdns_record(record *libdns.Record) zapcore.ObjectMarshaler {
 	return zapcore.ObjectMarshalerFunc(f)
 }
 
-
 // MarshalLogObject satisfies the zapcore.ObjectMarshaler interface.
 func (r request) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("zone", r.zone)

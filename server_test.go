@@ -60,7 +60,6 @@ const dns_only_json string = `{
 	}
 }`
 
-
 const dns_but_empty string = `{
 	admin localhost:2999
 	debug
@@ -137,7 +136,6 @@ func query_dns(t *testing.T, name string, qtype uint16) *dns.Msg {
 	}
 	return in
 }
-
 
 func wAcKY_casE(input string) string {
 	INPUT := strings.ToUpper(input)
@@ -226,15 +224,15 @@ func check_errors(t *testing.T, m *dns.Msg, rcode int) {
 		t.Fatal(err, "\n", m)
 	}
 	/*
-	if !reflect.DeepEqual(in.Question, m.Question) {
-		t.Fatal(
-			"question section mismatch!",
-			"\nsent: ",
-			m.Question,
-			"\nreceived: ",
-			in.Question,
-		)
-	}
+		if !reflect.DeepEqual(in.Question, m.Question) {
+			t.Fatal(
+				"question section mismatch!",
+				"\nsent: ",
+				m.Question,
+				"\nreceived: ",
+				in.Question,
+			)
+		}
 	*/
 	if in.Rcode != rcode {
 		t.Fatal(
@@ -281,7 +279,6 @@ func check_fails(t *testing.T, m *dns.Msg, error_contains string) {
 	}
 }
 
-
 func TestServer(t *testing.T) {
 	// I guess I have to seed my own RNG like a caveman
 	rand.Seed(time.Now().UnixNano())
@@ -292,7 +289,7 @@ func TestServer(t *testing.T) {
 	tester := caddytest.NewTester(t)
 	tester.InitServer(dns_only, "caddyfile")
 
-	records := []string {
+	records := []string{
 		"sub123.example.com. A 127.0.0.1",
 		"ABC123 AAAA ::",
 		"example.com. CAA 0 issue ca.example.net",
@@ -303,7 +300,6 @@ func TestServer(t *testing.T) {
 		"txt123.example.com. TXT Test123",
 		"whitespace. TXT Test 123 ABC	XYZ",
 	}
-
 
 	for _, record := range records {
 		check_exists(t, record)
@@ -323,7 +319,6 @@ func TestServer(t *testing.T) {
 	chaos.Question[0].Qclass = dns.ClassCHAOS
 	check_errors(t, chaos, dns.RcodeNotImplemented)
 
-
 	/* IGNORE NON-QUESTIONS */
 	question := new(dns.Msg)
 	question.SetQuestion("sub123.example.com.", dns.TypeA)
@@ -332,7 +327,6 @@ func TestServer(t *testing.T) {
 	answer, _ := dns.NewRR("sub123.example.com. A 127.0.0.1")
 	not_a_question.Answer = []dns.RR{answer}
 	check_fails(t, not_a_question, "timeout")
-
 
 	/*	REFUSE MULTI-QUESTIONS */
 	multi := new(dns.Msg)

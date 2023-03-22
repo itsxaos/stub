@@ -210,7 +210,7 @@ func (srv *Server) handle_query(q query) {
 	}
 	// queries may be wAcKY casE
 	// https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00
-	key := key {
+	key := key{
 		Type: dns.Type(qstn.Qtype),
 		Name: strings.ToLower(qstn.Name),
 	}
