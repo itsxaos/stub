@@ -56,13 +56,16 @@ func (srv *Server) insert_record(record dns.RR) {
 	}
 }
 
-func (srv *Server) delete_record(record dns.RR) {
+func (srv *Server) delete_record(record dns.RR) bool {
 	key := rr_key(record)
 	current, exists := srv.Records[key]
 	if exists {
 		filtered := []dns.RR{}
+		as_string := record.String()
 		for _, rec := range current {
-			if rec != record {
+			// TODO: see if there is a more efficient way to compare these
+			// just rec != record does not seem to work, might be doing ptr eq
+			if rec.String() != as_string {
 				filtered = append(filtered, rec)
 			}
 		}
@@ -71,8 +74,10 @@ func (srv *Server) delete_record(record dns.RR) {
 		} else {
 			srv.Records[key] = filtered
 		}
+		return len(filtered) < len(current)
 	} else {
 		// doesn't exist, nothing to delete
+		return false
 	}
 }
 
@@ -104,17 +109,23 @@ func (srv *Server) main() {
 }
 
 func (srv *Server) handle_request(r request) {
-	srv.logger.Debug("received", zap.Object("request", r))
-
+	var count_field zap.Field
 	if r.append {
 		for _, record := range r.records {
 			srv.insert_record(record)
 		}
+		count_field = zap.Int("appended_records", len(r.records))
 	} else {
+		count := 0
 		for _, record := range r.records {
-			srv.delete_record(record)
+			if srv.delete_record(record) {
+				count += 1
+			}
 		}
+		count_field = zap.Int("deleted_records", count)
 	}
+
+	srv.logger.Debug("handled", zap.Object("request", r), count_field)
 
 	r.responder <- srv.start_stop_server()
 }
